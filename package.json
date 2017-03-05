@@ -1,0 +1,25 @@
+{
+  "name": "node-js-git-merge",
+  "version": "1.0.0",
+  "description": "A node reimplementation of git-merge-file",
+  "main": "git-merge-file.js",
+  "scripts": {
+    "test": "cd t && ./t6023-merge-file.sh"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/santiagotorres/node-js-git-merge.git"
+  },
+  "keywords": [
+    "git"
+  ],
+  "author": "Santiago Torres-Arias",
+  "license": "GPL-3.0",
+  "bugs": {
+    "url": "https://github.com/santiagotorres/node-js-git-merge/issues"
+  },
+  "homepage": "https://github.com/santiagotorres/node-js-git-merge#readme",
+  "dependencies": {
+    "argparse": ""
+  }
+}

@@ -546,17 +546,19 @@ var xdl_merge = function(orig, mf1, mf2, xmp, result) {
   _status = 0;
 
   if (xscr1 == null) {
-    result.ptr = mf2.ptr
-    result.size = mf2.size;
+    result = mf2.ptr.reduce(function(acc, val) { 
+          return acc + String.fromCharCode(val);
+        }, "");
   } 
   else if (xscr2 == null) {
-    result.ptr = mf1.ptr;
-    result.size = mf1.size
+    result = mf1.ptr.reduce(function(acc, val) { 
+          return acc + String.fromCharCode(val);
+        }, "");
   } else {
-    _status = xdl_do_merge(xe1, xscr1, xe2, xscr2, xmp, result);
+    result = xdl_do_merge(xe1, xscr1, xe2, xscr2, xmp, result);
   }
 
-  return [_status, result];
+  return result;
 }
 
 module.exports.xdl_merge = xdl_merge;

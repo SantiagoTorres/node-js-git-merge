@@ -108,6 +108,6 @@ var res = xmerge.xdl_merge(new xmerge.Mmfile(args.ancestor),
 var filename = args.ancestor
 
 if (args.stdout)
-  process.stdout.write(res[0]);
+  process.stdout.write(res);
 else
   console.log("writing to a file is not implemented yet (although it should be rather trivial :))");

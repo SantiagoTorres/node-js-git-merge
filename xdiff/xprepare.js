@@ -54,6 +54,67 @@ function Xrecord(next, ptr, size, ha) {
 }
 
 
+var xdl_clean_mmatch = function(dis, i, s, e) {
+  var r, rdis0, rpdis0, rdis1, rpdis1;
+
+  /*
+   * Limits the window the is examined during the similar-lines
+   * scan. The loops below stops when dis[i - r] == 1 (line that
+   * has no match), but there are corner cases where the loop
+   * proceed all the way to the extremities by causing huge
+   * performance penalties in case of big files.
+   */
+    var XDL_SIMSCAN_WINDOW = 100;
+  if (i - s > XDL_SIMSCAN_WINDOW)
+    s = i - XDL_SIMSCAN_WINDOW;
+  if (e - i > XDL_SIMSCAN_WINDOW)
+    e = i + XDL_SIMSCAN_WINDOW;
+
+  /*
+   * Scans the lines before 'i' to find a run of lines that either
+   * have no match (dis[j] == 0) or have multiple matches (dis[j] > 1).
+   * Note that we always call this function with dis[i] > 1, so the
+   * current line (i) is already a multimatch line.
+   */
+  for (r = 1, rdis0 = 0, rpdis0 = 1; (i - r) >= s; r++) {
+    if (!dis[i - r])
+      rdis0++;
+    else if (dis[i - r] == 2)
+      rpdis0++;
+    else
+      break;
+  }
+  /*
+   * If the run before the line 'i' found only multimatch lines, we
+   * return 0 and hence we don't make the current line (i) discarded.
+   * We want to discard multimatch lines only when they appear in the
+   * middle of runs with nomatch lines (dis[j] == 0).
+   */
+  if (rdis0 == 0)
+    return 0;
+  for (r = 1, rdis1 = 0, rpdis1 = 1; (i + r) <= e; r++) {
+    if (!dis[i + r])
+      rdis1++;
+    else if (dis[i + r] == 2)
+      rpdis1++;
+    else
+      break;
+  }
+  /*
+   * If the run after the line 'i' found only multimatch lines, we
+   * return 0 and hence we don't make the current line (i) discarded.
+   */
+  if (rdis1 == 0)
+    return 0;
+  rdis1 += rdis0;
+  rpdis1 += rpdis0;
+
+  var XDL_KPDIS_RUN = 4;
+
+  return rpdis1 * XDL_KPDIS_RUN < (rpdis1 + rdis1);
+}
+
+
 /*
  * Try to reduce the problem complexity, discard records that have no
  * matches on the other file. Also, lines that have multiple matches
@@ -93,7 +154,7 @@ var xdl_cleanup_records = function(cf, xdf1, xdf2) {
 
   for (nreff = 0, i = xdf1.dstart, recs = xdf1.recs; i <= xdf1.dend; i++) {
     if (dis[dis1 + i] == 1 ||
-        (dis[dis1 + i] == 2 /*&& FIXME: do we care ?!xdl_clean_mmatch(dis1, i, xdf1.dstart, xdf1.dend)*/)) {
+        (dis[dis1 + i] == 2 && !xdl_clean_mmatch(dis.slice(dis1), i, xdf1.dstart, xdf1.dend))) {
       xdf1.rindex[nreff] = i;
       xdf1.ha[nreff] = recs[i].ha;
       nreff++;
@@ -105,7 +166,7 @@ var xdl_cleanup_records = function(cf, xdf1, xdf2) {
 
   for (nreff = 0, i = xdf2.dstart, recs = xdf2.recs; i <= xdf2.dend; i++){
     if (dis[dis2 + i] == 1 ||
-        (dis[dis2 + i] == 2 /*&& !xdl_clean_mmatch(dis2, i, xdf2.dstart, xdf2.dend)*/)) {
+        (dis[dis2 + i] == 2 && !xdl_clean_mmatch(dis.slice(dis2), i, xdf2.dstart, xdf2.dend))) {
       xdf2.rindex[nreff] = i;
       xdf2.ha[nreff] = recs[i].ha;
       nreff++;
@@ -113,7 +174,6 @@ var xdl_cleanup_records = function(cf, xdf1, xdf2) {
       xdf2.rchg[i] = 1;
   }
   xdf2.nreff = nreff;
-
   return 0;
 }
 

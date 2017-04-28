@@ -72,15 +72,16 @@ var xdl_recs_copy_0 = function(useOrig, xe, i, count, needsCr, addNl, dest) {
   var recs = (useOrig ? xe.xdf1.recs : xe.xdf2.recs).slice(i);
   var size = 0;
 
-  if (count < 1)
+  if (count < 1 || recs.length == 0)
     return "";
 
   dest = ""
   for (i = 0; i < count; size += recs[i++].size)
-    if (dest != null)
-        dest += recs[i].ptr.reduce(function(acc, val) { 
+    if (dest != null && recs[i] != undefined) {
+        dest += recs[i].ptr.reduce(function(acc, val) {
           return acc + String.fromCharCode(val);
         }, "");
+    }
 
   if (addNl) {
     i = recs != null ? recs[count - 1].size : 0;
@@ -210,7 +211,7 @@ var xdl_fill_merge_buffer = function(xe1, name1, xe2, name2, ancestorName,
     else if (m.mode & 3) {
 
       /* before conflicting part */
-      dest += xdl_recs_copy(xe2, i, m.i1 - i, 0, 0, dest + size); 
+      dest += xdl_recs_copy(xe1, i, m.i1 - i, 0, 0, dest + size);
 
       /* post-image from side #1 */
       if (m.mode & 1) {
@@ -220,8 +221,8 @@ var xdl_fill_merge_buffer = function(xe1, name1, xe2, name2, ancestorName,
        }
 
       /* post-image from side #2 */
-      if (m.mode & 2) 
-        dest += xdl_recs_copy(ze2, m.i2, m.chg2, 0, 0, dest + size);
+      if (m.mode & 2)
+        dest += xdl_recs_copy(xe2, m.i2, m.chg2, 0, 0, dest + size);
 
     } else
       continue;
@@ -242,6 +243,7 @@ var xdl_fill_merge_buffer = function(xe1, name1, xe2, name2, ancestorName,
 var xdl_refine_conflicts = function(xe1, xe2, m, xpp) {
   for (; m; m = m.next) {
 
+
     var t1 = new xdiff.Mmfile();
     var t2 = new xdiff.Mmfile();
     var xe = {};
@@ -259,21 +261,21 @@ var xdl_refine_conflicts = function(xe1, xe2, m, xpp) {
     /*
      * This probably does not work outside git, since
      * we have a very simple mmfile structure.
-     */ 
+     */
     var new_buff = Buffer.concat(xe1.xdf2.recs.slice(m.i1, m.i1 + m.chg1 - 1).map(
           function(x) {return x.ptr;}));
-      
+
     t1.ptr = new_buff;
     t1.size = new_buff.length;
 
     new_buff = Buffer.concat(xe2.xdf2.recs.slice(m.i2, m.i2 + m.chg2 - 1).map(
           function(x) {return x.ptr;}));
- 
+
     t2.ptr = new_buff;
     t2.size = new_buff.length;
 
     xdiffi.xdl_do_diff(t1, t2, xpp, xe)
-    xscr = xdiffi.xdl_build_script(xe, xscr) 
+    xscr = xdiffi.xdl_build_script(xe, xscr)
     if (xdiffi.xdl_change_compact(xe.xdf1, xe.xdf2, xpp.flags) < 0 ||
         xdiffi.xdl_change_compact(xe.xdf2, xe.xdf1, xpp.flags) < 0) {
       return -1;
@@ -288,7 +290,7 @@ var xdl_refine_conflicts = function(xe1, xe2, m, xpp) {
     m.i2 = xscr.i2 + i2;
     m.chg2 = xscr.chg2;
     while (xscr.next) {
-      var m2 = new Xdlmerge();
+      var m2 = new Xdmerge(null, 0, xscr.i1 + i1, xscr.i2 + i2,xscr.chg1, xscr.chg2, 0, 0);
       xscr = xscr.next;
       m2.next = m.next;
       m.next = m2;
@@ -315,7 +317,7 @@ var line_contains_alnum = function(str, size) {
     }
   }
   return true;
-} 
+}
 
 var lines_contain_alnum = function(xe, i, chg) {
   for (; chg; chg--, i++) {
@@ -331,7 +333,7 @@ var lines_contain_alnum = function(xe, i, chg) {
  * as conflicting, too.
  */
 var xdl_merge_two_conflicts = function(m) {
-  next_m = m.next;
+  var next_m = m.next;
   m.chg1 = next_m.i1 + next_m.chg1 - m.i1;
   m.chg2 = next_m.i2 + next_m.chg2 - m.i2;
   m.next = next_m.next;
@@ -359,7 +361,7 @@ var xdl_simplify_non_conflicts = function(xe1, m, simplifyIfNoAlnum) {
     begin = m.i1 + m.chg1;
     end = next_m.i1;
 
-    if (m.mode != 0 || next_m.mode != 0 || (end - begin > 3 && 
+    if (m.mode != 0 || next_m.mode != 0 || (end - begin > 3 &&
           (!simplifyIfNoAlnum || lines_contain_alnum(xe1, begin, end-begin)))) {
       m = next_m;
     } else {
@@ -380,7 +382,7 @@ var xdl_simplify_non_conflicts = function(xe1, m, simplifyIfNoAlnum) {
  * returns < 0 on error, == 0 for no conflicts, else number of conflicts
  */
 var xdl_do_merge = function(xe1, xscr1, xe2, xscr2, xmp, result) {
-  
+
   var changes, c;
   var xpp = xmp.xpp;
   var ancestorName = xmp.ancestor;
@@ -407,10 +409,10 @@ var xdl_do_merge = function(xe1, xscr1, xe2, xscr2, xmp, result) {
     if (!changes)
       changes = c;
 
-    if (xscr1.i1 + xscr1.cg1 < xscr2.i1) {
+    if (xscr1.i1 + xscr1.chg1 < xscr2.i1) {
       i0 = xscr1.i1;
       i1 = xscr1.i2;
-      i2 = xscr1.i2 - xscr2.i1 + xscr1.i1;
+      i2 = xscr2.i2 - xscr2.i1 + xscr1.i1;
       chg0 = xscr1.chg1;
       chg1 = xscr1.chg2;
       chg2 = xscr1.chg1;
@@ -418,20 +420,20 @@ var xdl_do_merge = function(xe1, xscr1, xe2, xscr2, xmp, result) {
       xscr1 = xscr1.next;
       continue;
     }
-    if (xscr2.i1 + xscr2.cg1 < xscr1.i1) {
+    if (xscr2.i1 + xscr2.chg1 < xscr1.i1) {
       i0 = xscr2.i1;
-      i1 = xscr2.i2;
-      i2 = xscr2.i2 - xscr1.i1 + xscr2.i1;
+      i1 = xscr1.i2 - xscr1.i1 + xscr2.i1;
+      i2 = xscr2.i2;
       chg0 = xscr2.chg1;
-      chg1 = xscr2.chg2;
-      chg2 = xscr2.chg1;
+      chg1 = xscr2.chg1;
+      chg2 = xscr2.chg2;
       c= xdl_append_merge (c, 2, i0, chg0, i1, chg1, i2, chg2)
       xscr2 = xscr2.next;
       continue;
     }
     if (level == 1 /*XDL_MERGE_MINIMAL */ || xscr1.i1 != xscr2.i1 ||
     xscr1.chg1 != xscr2.chg1 || xscr1.chg2 != xscr2.chg2 ||
-      xdl_merge_cmp_lines(xe1, xscr1.i2, xe2, xscr2.i2, xscr1.chg2, 
+      xdl_merge_cmp_lines(xe1, xscr1.i2, xe2, xscr2.i2, xscr1.chg2,
           xpp.flags)) {
           /* conflict */
       var off = xscr1.i1 - xscr2.i1;
@@ -495,8 +497,8 @@ var xdl_do_merge = function(xe1, xscr1, xe2, xscr2, xmp, result) {
     changes = c;
 
   /* refine conflicts */
-  if (/*XDL_MERGE_ZEALOUS*/3 <= level && 
-      (xdl_refine_conflicts(xe1, xe2, changes, xpp) < 0 || 
+  if (/*XDL_MERGE_ZEALOUS*/3 <= level &&
+      (xdl_refine_conflicts(xe1, xe2, changes, xpp) < 0 ||
        xdl_simplify_non_conflicts(xe1, changes, /*XDL_MERGE_ZEALOUS*/3 < level) < 0)) {
     return "ERROR";
   }
@@ -512,7 +514,7 @@ var xdl_do_merge = function(xe1, xscr1, xe2, xscr2, xmp, result) {
 
 var xdl_merge = function(orig, mf1, mf2, xmp, result) {
 
-  var xscr1, xscr2;
+  var xscr1 = null, xscr2 = null;
   var xe1, xe2;
   var _status;
   var xpp = xmp.xpp;
@@ -526,20 +528,22 @@ var xdl_merge = function(orig, mf1, mf2, xmp, result) {
   if (xdiffi.xdl_do_diff(orig, mf1, xpp, xe1) < 0) {
     return -1;
   }
-  
+
   if (xdiffi.xdl_do_diff(orig, mf2, xpp, xe2) < 0) {
     return -1;
   }
 
-  xscr1 = xdiffi.xdl_build_script(xe1);
   if (xdiffi.xdl_change_compact(xe1.xdf1, xe1.xdf2, xpp.flags) < 0 ||
-      xdiffi.xdl_change_compact(xe1.xdf2, xe1.xdf1, xpp.flags) < 0) {
+      xdiffi.xdl_change_compact(xe1.xdf2, xe1.xdf1, xpp.flags) < 0 ||
+      (xscr1 = xdiffi.xdl_build_script(xe1)) == null
+      ) {
     return -1;
   }
 
-  xscr2 = xdiffi.xdl_build_script(xe2);
   if (xdiffi.xdl_change_compact(xe2.xdf1, xe2.xdf2, xpp.flags) < 0 ||
-      xdiffi.xdl_change_compact(xe2.xdf2, xe2.xdf1, xpp.flags) < 0) {
+      xdiffi.xdl_change_compact(xe2.xdf2, xe2.xdf1, xpp.flags) < 0 ||
+      (xscr2 = xdiffi.xdl_build_script(xe2)) == null
+       ) {
     return -1;
   }
   

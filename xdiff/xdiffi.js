@@ -2,6 +2,15 @@
 
 var xprepare = require("./xprepare.js");
 
+/* this value used to be 4294967295. Interestingly this doesn't work on
+ * javascript. the reason as to why this happens is that the unsigned longs get
+ * "promoted" to bigger variables on if checks. I'd call this a bug in the
+ * original implementation
+ */
+const XDL_LINE_MAX = 2147483647;
+const XDL_SNAKE_CNT = 20;
+const XDL_HEUR_MIN = 256;
+
 function DD(xdf) {
   this.nrec = xdf.nreff;
   this.ha = xdf.ha;
@@ -30,8 +39,7 @@ function XdlGroup(xdf) {
     this.end += 1;
 }
 
-const XDF_INDENT_HEURISTIC = (1 << 8)
-
+const XDF_INDENT_HEURISTIC = (1 << 8);
 
 /*
  * Fill m with information about a hypothetical split of xdf above line split.
@@ -115,37 +123,42 @@ var xdl_split = function(ha1, off1, lim1, ha2, off2, lim2, kvdf, kvdb,
      * Also we initialize the external K value to -1 so that we can
      * avoid extra conditions check inside the core loop.
      */
-    if (fmin > dmin) { 
-      kvd[kvdf + --fmin - 1] = -1;
+    if (fmin > dmin) {
+      fmin -= 1;
+      kvd[kvdf + fmin - 1] = -1;
+    } else {
       fmin++;
     }
-    else
-      fmin++;
+
     if (fmax < dmax) {
+      fmax += 1
       kvd[kvdf + fmax + 1] = -1;
-      fmax++;
+    } else {
+      fmax--;
     }
-    else
-      fmax ++;
+
 
     for (d = fmax; d >= fmin; d -= 2) {
-      if (kvd[kvdf + d - 1] >= kvd[kvdf + d + 1])
-        i1 = kvdf + d - 1 + 1;
-      else
-        i1 = kvdf + d + 1;
+      if (kvd[kvdf + d - 1] >= kvd[kvdf + d + 1]) {
+        i1 = kvd[kvdf + d - 1] + 1;
+      } else {
+        i1 = kvd[kvdf + d + 1];
+      }
       prev1 = i1;
       i2 = i1 - d;
       for (; i1 < lim1 && i2 < lim2 && ha1[i1] == ha2[i2]; i1++, i2++);
-      if (i1 - prev1 > xenv.snake_cnt)
+      if (i1 - prev1 > xenv.snake_cnt) {
         got_snake = 1;
-      kvd[kvdf + d] = i1;
-      if (odd && bmin <= d && d <= bmax && kvdb[d] <= i1) {
-        spl.i1 = i1;
-        spl.i2 = i2;
-        spl.min_lo = spl.min_hi = 1;
-        return ec;
       }
+      kvd[kvdf + d] = i1;
+      if (odd && bmin <= d && d <= bmax && kvd[kvdb + d] <= i1) {
+          spl.i1 = i1;
+          spl.i2 = i2;
+          spl.min_lo = spl.min_hi = 1;
+          return ec;
+        }
     }
+
 
     /*
      * We need to extent the diagonal "domain" by one. If the next
@@ -154,17 +167,19 @@ var xdl_split = function(ha1, off1, lim1, ha2, off2, lim2, kvdf, kvdb,
      * Also we initialize the external K value to -1 so that we can
      * avoid extra conditions check inside the core loop.
      */
-    if (bmin > dmin)
-      kvdb[--bmin - 1] = XDL_LINE_MAX;
-    else
+    if (bmin > dmin) {
+      bmin--;
+      kvd[kvdb + bmin - 1] = XDL_LINE_MAX;
+    } else
       ++bmin;
-    if (bmax < dmax)
-      kvdb[++bmax + 1] = XDL_LINE_MAX;
-    else
+    if (bmax < dmax) {
+      bmax++;
+      kvd[kvdb + bmax + 1] = XDL_LINE_MAX;
+    } else
       --bmax;
 
     for (d = bmax; d >= bmin; d -= 2) {
-      if (kvd[kbdb + d - 1] < kvd[kvdb + d + 1])
+      if (kvd[kvdb + d - 1] < kvd[kvdb + d + 1])
         i1 = kvd[kvdb + d - 1];
       else
         i1 = kvd[kvdb + d + 1] - 1;
@@ -174,7 +189,7 @@ var xdl_split = function(ha1, off1, lim1, ha2, off2, lim2, kvdf, kvdb,
       if (prev1 - i1 > xenv.snake_cnt)
         got_snake = 1;
       kvd[kvdb + d] = i1;
-      if (!odd && fmin <= d && d <= fmax && i1 <= kvdf[d]) {
+      if (!odd && fmin <= d && d <= fmax && i1 <= kvd[kvdf + d]) {
         spl.i1 = i1;
         spl.i2 = i2;
         spl.min_lo = spl.min_hi = 1;
@@ -254,7 +269,7 @@ var xdl_split = function(ha1, off1, lim1, ha2, off2, lim2, kvdf, kvdb,
 
       fbest = fbest1 = -1;
       for (d = fmax; d >= fmin; d -= 2) {
-        i1 = XDL_MIN(kvdf[d], lim1);
+        i1 = Math.min(kvd[kvdf + d], lim1);
         i2 = i1 - d;
         if (lim2 < i2)
           i1 = lim2 + d, i2 = lim2;
@@ -264,9 +279,9 @@ var xdl_split = function(ha1, off1, lim1, ha2, off2, lim2, kvdf, kvdb,
         }
       }
 
-      bbest = bbest1 = 64 // XDL_LINE_MAX;
+      bbest = bbest1 = XDL_LINE_MAX;
       for (d = bmax; d >= bmin; d -= 2) {
-        i1 = Math.max(off1, kvdb[d]);
+        i1 = Math.max(off1, kvd[kvdb + d]);
         i2 = i1 - d;
         if (i2 < off2)
           i1 = off2 + d, i2 = off2;
@@ -338,9 +353,9 @@ var xdl_recs_cmp = function (dd1, off1, lim1, dd2, off2, lim2, kvdf,
      * ... et Impera.
      */
     if (xdl_recs_cmp(dd1, off1, spl.i1, dd2, off2, spl.i2, kvdf, kvdb,
-          spl.min_lo, xenv) < 0 ||
+          spl.min_lo, xenv, kvd) < 0 ||
         xdl_recs_cmp(dd1, spl.i1, lim1, dd2, spl.i2, lim2, kvdf, kvdb,
-          spl.min_hi, xenv) < 0) {
+          spl.min_hi, xenv, kvd) < 0) {
 
       return -1;
     }
@@ -352,7 +367,7 @@ var xdl_recs_cmp = function (dd1, off1, lim1, dd2, off2, lim2, kvdf,
 module.exports.xdl_recs_cmp = xdl_recs_cmp;
 
 
-module.exports.xdl_do_diff = function(mf1, mf2, xpp, xe) { 
+module.exports.xdl_do_diff = function(mf1, mf2, xpp, xe) {
 
   var ndiags;
   var kvd, kvdf, kvdb;
@@ -371,13 +386,13 @@ module.exports.xdl_do_diff = function(mf1, mf2, xpp, xe) {
       return -1;
   }
 
-  /* 
+  /*
   /*
    * Allocate and setup K vectors to be used by the differential algorithm.
    * One is to store the forward path and one to store the backward path.
    */
   ndiags = xe.xdf1.nreff + xe.xdf2.nreff + 3;
-  if (!(kvd = new Uint32Array(2 * ndiags + 2))) 
+  if (!(kvd = new Int32Array(2 * ndiags + 2)))
     return -1;
 
   kvdf = 0; // Instead of being a pointer, we need to make this an index... to kvd
@@ -385,12 +400,14 @@ module.exports.xdl_do_diff = function(mf1, mf2, xpp, xe) {
   kvdf += xe.xdf2.nreff + 1;
   kvdb += xe.xdf2.nreff + 1;
 
-  xenv.mxcost = Math.floor(Math.sqrt(ndiags));
+  xenv.mxcost = Math.max(Math.floor(Math.sqrt(ndiags)), 256); // XDL_MAX_COST_MIN
+  xenv.snake_cnt = XDL_SNAKE_CNT;
+  xenv.heur_min = XDL_HEUR_MIN;
 
   dd1 = new DD(xe.xdf1);
   dd2 = new DD(xe.xdf2);
 
-  xdl_recs_cmp(dd1, 0, dd1.nrec, dd2, 0, dd2.nrec, kvdf, kvdb, 1,  xenv, kvd)
+  xdl_recs_cmp(dd1, 0, dd1.nrec, dd2, 0, dd2.nrec, kvdf, kvdb, (xpp.flags & 1) != 0,  xenv, kvd)
 
 }
 
@@ -402,7 +419,6 @@ module.exports.xdl_change_compact = function (xdf, xdfo, flags) {
 
   g = new XdlGroup(xdf);
   go = new XdlGroup(xdfo);
-
 
   while (true) {
     if (g.end == g.start) {    /* Move past the just-processed group: */
@@ -436,7 +452,7 @@ module.exports.xdl_change_compact = function (xdf, xdfo, flags) {
       /*
        * This is this highest that this group can be shifted.
        * Record its end index:
-       */ 
+       */
       earliest_end = g.end;
 
       if (go.end > go.start)
@@ -468,7 +484,7 @@ module.exports.xdl_change_compact = function (xdf, xdfo, flags) {
        * Move the possibly merged group of changes back to line
        * up with the last group of changes from the other file
        * that it can align with.
-       */ 
+       */
       while (go.end == go.start) {
         if (group_slide_up(xdf, g, flags))
           console.log("match disappeared");
@@ -486,7 +502,7 @@ module.exports.xdl_change_compact = function (xdf, xdfo, flags) {
        * and add the scores for the two splits to define a
        * "score" for each position that the group can be shifted
        * to. Then we pick the shift with the lowest score.
-       */ 
+       */
       var shift, best_shift = -1;
       var best_score = splitScore();
 
@@ -513,7 +529,7 @@ module.exports.xdl_change_compact = function (xdf, xdfo, flags) {
       }
     }
 
-  //next: FIXME: this used to be a label and I had to inline it 
+  //next: FIXME: this used to be a label and I had to inline it
     /* Move past the just-processed group: */
     if (group_next(xdf, g))
       break;
@@ -714,13 +730,14 @@ module.exports.xdl_build_script = function(xe, xscr) {
   /*
    * Trivial. Collects "groups" of changes and creates an edit script.
    */
-  for (i1 = xe.xdf1.nrec, i2 = xe.xdf2.nrec; i1 >= 0 || i2 >= 0; i1--, i2--)
+  for (i1 = xe.xdf1.nrec, i2 = xe.xdf2.nrec; i1 >= 0 || i2 >= 0; i1--, i2--) {
     if (rchg1[i1 - 1] || rchg2[i2 - 1]) {
       for (l1 = i1; rchg1[i1 - 1]; i1--);
       for (l2 = i2; rchg2[i2 - 1]; i2--);
 
-      cscr = new Xch(cscr, i1, i2, l1 - i1, l2 - i2)
+      cscr = new Xch(cscr, i1, i2, l1 - i1, l2 - i2);
     }
+  }
 
   /* TODO: please take away all of this vestigial memory management */
   xscr = cscr;

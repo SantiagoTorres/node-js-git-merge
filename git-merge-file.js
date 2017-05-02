@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 'use strict';
- 
+
 var ArgumentParser = require('argparse').ArgumentParser;
 var xmerge = require ("./xdiff/xmerge.js")
 
@@ -93,7 +93,7 @@ xmp.style = 0;
 xmp.favor = 0;
 xmp.xpp = 0;
 
-/* NOTE: we do not read repository config files 
+/* NOTE: we do not read repository config files
  * NOTE: We also do not set a prefix to the filenames
  */
 
@@ -101,13 +101,13 @@ xmp.ancestor = args.ancestor;
 xmp.file1 = args.file1;
 xmp.file2 = args.file2;
 
-var res = xmerge.xdl_merge(new xmerge.Mmfile(args.ancestor), 
+var res = xmerge.xdl_merge(new xmerge.Mmfile(args.ancestor),
     new xmerge.Mmfile(args.file1), new xmerge.Mmfile (args.file2), xmp,
     result);
 
 var filename = args.ancestor
 
 if (args.stdout)
-  process.stdout.write(res);
+  process.stdout.write(decodeURIComponent(escape(res)));
 else
   console.log("writing to a file is not implemented yet (although it should be rather trivial :))");
